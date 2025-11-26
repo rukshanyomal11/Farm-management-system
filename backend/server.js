@@ -86,4 +86,20 @@ const startServer = async () => {
   }
 };
 
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('\n🔴 UNCAUGHT EXCEPTION:');
+  console.error('Error:', error.message);
+  console.error('Stack:', error.stack);
+  console.error('🔴🔴🔴🔴🔴🔴🔴🔴🔴\n');
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('\n🔴 UNHANDLED REJECTION:');
+  console.error('Reason:', reason);
+  console.error('Promise:', promise);
+  console.error('🔴🔴🔴🔴🔴🔴🔴🔴🔴\n');
+});
+
 startServer();

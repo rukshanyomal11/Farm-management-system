@@ -2,63 +2,53 @@ const nodemailer = require('nodemailer');
 
 // Create email transporter
 const createTransporter = () => {
-  return nodemailer.createTransporter({
-    host: process.env.EMAIL_HOST,
-    port: process.env.EMAIL_PORT,
-    secure: false, // true for 465, false for other ports
+  return nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASSWORD
+    },
+    tls: {
+      rejectUnauthorized: false
     }
   });
 };
 
 // Send verification code
 const sendVerificationCode = async (email, code) => {
-  // Skip email in development mode
-  if (process.env.NODE_ENV === 'development') {
-    console.log('\n=================================');
-    console.log('📧 DEVELOPMENT MODE - Code:');
-    console.log('=================================');
-    console.log(`Email: ${email}`);
-    console.log(`Code: ${code}`);
-    console.log('=================================\n');
-    return;
-  }
-
-  const transporter = createTransporter();
-  
-  const mailOptions = {
-    from: process.env.EMAIL_FROM,
-    to: email,
-    subject: 'Email Verification Code - Farm Management System',
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #2563eb;">Email Verification</h2>
-        <p>Hello,</p>
-        <p>Your verification code is:</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <div style="background-color: #f3f4f6; padding: 20px; border-radius: 10px; display: inline-block;">
-            <h1 style="color: #2563eb; font-size: 36px; letter-spacing: 8px; margin: 0;">
-              ${code}
-            </h1>
-          </div>
-        </div>
-        <p>This code will expire in <strong>10 minutes</strong>.</p>
-        <p>If you didn't request this code, please ignore this email.</p>
-        <p style="color: #999; font-size: 12px; margin-top: 30px;">
-          Do not share this code with anyone.
-        </p>
-      </div>
-    `
-  };
-  
   try {
+    const transporter = createTransporter();
+    
+    const mailOptions = {
+      from: process.env.EMAIL_FROM,
+      to: email,
+      subject: 'Email Verification Code - Farm Management System',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #2563eb;">Email Verification</h2>
+          <p>Hello,</p>
+          <p>Your verification code is:</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <div style="background-color: #f3f4f6; padding: 20px; border-radius: 10px; display: inline-block;">
+              <h1 style="color: #2563eb; font-size: 36px; letter-spacing: 8px; margin: 0;">
+                ${code}
+              </h1>
+            </div>
+          </div>
+          <p>This code will expire in <strong>10 minutes</strong>.</p>
+          <p>If you didn't request this code, please ignore this email.</p>
+          <p style="color: #999; font-size: 12px; margin-top: 30px;">
+            Do not share this code with anyone.
+          </p>
+        </div>
+      `
+    };
+    
     await transporter.sendMail(mailOptions);
-    console.log(`✅ Verification code sent to ${email}`);
   } catch (error) {
-    console.error('❌ Error sending verification code:', error.message);
-    throw new Error('Failed to send verification code');
+    throw new Error(`Email sending failed: ${error.message}`);
   }
 };
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, Lock, User, Phone, MapPin, Eye, EyeOff, Building2, UserPlus, CheckCircle, ArrowRight } from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 
 const Register = () => {
   const [step, setStep] = useState(1); // 1: Email, 2: Verify Code, 3: Personal Info, 4: Farm Info
@@ -79,12 +80,14 @@ const Register = () => {
       if (response.ok) {
         setStep(2);
         setTimerSeconds(600); // 10 minutes
-        alert('Verification code sent to your email!');
+        toast.success('Verification code sent to your email!');
       } else {
         setErrors({ email: data.message });
+        toast.error(data.message || 'Failed to send code');
       }
     } catch (err) {
       setErrors({ email: 'Failed to send code. Please try again.' });
+      toast.error('Failed to send code. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -93,11 +96,13 @@ const Register = () => {
   const handleVerifyCode = async () => {
     if (!formData.verificationCode) {
       setErrors({ verificationCode: 'Please enter the verification code' });
+      toast.error('Please enter the verification code');
       return;
     }
 
     if (formData.verificationCode.length !== 6) {
       setErrors({ verificationCode: 'Code must be 6 digits' });
+      toast.error('Code must be 6 digits');
       return;
     }
 
@@ -118,11 +123,14 @@ const Register = () => {
 
       if (response.ok) {
         setStep(3);
+        toast.success('Email verified successfully!');
       } else {
         setErrors({ verificationCode: data.message });
+        toast.error(data.message || 'Invalid verification code');
       }
     } catch (err) {
       setErrors({ verificationCode: 'Verification failed. Please try again.' });
+      toast.error('Verification failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -224,13 +232,17 @@ const Register = () => {
       const data = await response.json();
 
       if (response.ok) {
-        alert('Registration successful! You can now login.');
-        window.location.href = '/login';
+        toast.success('Registration successful! Redirecting to login...');
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
       } else {
         setErrors({ submit: data.message });
+        toast.error(data.message || 'Registration failed');
       }
     } catch (err) {
       setErrors({ submit: 'Registration failed. Please try again.' });
+      toast.error('Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -243,92 +255,94 @@ const Register = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 p-4">
-      <div className="w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row">
+    <div >
+      <Toaster position="top-center" reverseOrder={false} />
+      
+      {/* Background Image */}
+      <div 
+        className="absolute inset-0 w-full h-full bg-cover bg-center"
+        style={{
+          backgroundImage: 'url(https://images.unsplash.com/photo-1625246333195-78d9c38ad449?q=80&w=2070)',
+          filter: 'brightness(0.9)'
+        }}
+      />
+      
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-black/20 to-black/40" />
+
+      <div className="w-full max-w-6xl mx-4 relative z-10 flex flex-col md:flex-row gap-8 items-center justify-center">
         
-        {/* Left Side - Illustration */}
-        <div className="md:w-1/2 bg-gradient-to-br from-blue-500 to-purple-500 p-12 flex flex-col justify-center items-center text-white relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-full opacity-10">
-            <div className="absolute top-10 right-10 w-32 h-32 bg-white rounded-full"></div>
-            <div className="absolute bottom-20 left-10 w-40 h-40 bg-white rounded-full"></div>
-            <div className="absolute top-1/2 right-1/4 w-24 h-24 bg-white rounded-full"></div>
-          </div>
-          
-          <div className="relative z-10 text-center">
-            <div className="mb-6">
-              <div className="inline-block p-4 bg-white/20 rounded-full backdrop-blur-sm mb-4">
-                <UserPlus className="w-16 h-16" />
-              </div>
-              <h1 className="text-4xl font-bold mb-3">HELLO</h1>
-              <h2 className="text-3xl font-bold mb-4">WELCOME</h2>
-              <p className="text-lg opacity-90 mb-6">
-                Join our Farm Management System
-              </p>
-              <p className="text-sm opacity-80 mb-8">
-                Create an account and start managing your farm efficiently
-              </p>
-            </div>
+        {/* Left Side - Welcome Text */}
+        <div className="md:w-1/2 text-white p-8 md:p-12">
+          <div className="max-w-md">
+            <h1 className="text-5xl md:text-6xl font-bold mb-4 drop-shadow-lg">
+              {step <= 2 ? 'Welcome back,' : 'Join Our'}
+            </h1>
+            <h2 className="text-4xl md:text-5xl font-bold mb-8 drop-shadow-lg">
+              {step <= 2 ? 'Farmer' : 'Community'}
+            </h2>
             
             {/* Progress Steps */}
-            <div className="flex justify-center items-center gap-2 mb-8">
+            <div className="flex items-center gap-2 mb-6">
               {[1, 2, 3, 4].map((num) => (
                 <div key={num} className="flex items-center">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    step >= num ? 'bg-white text-blue-500' : 'bg-white/30'
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border-2 transition-all duration-300 ${
+                    step >= num 
+                      ? 'bg-white/90 border-white text-green-600' 
+                      : 'bg-white/20 border-white/40 text-white'
                   } font-bold text-sm`}>
-                    {step > num ? <CheckCircle className="w-5 h-5" /> : num}
+                    {step > num ? <CheckCircle className="w-6 h-6" /> : num}
                   </div>
-                  {num < 4 && <div className={`w-8 h-0.5 ${step > num ? 'bg-white' : 'bg-white/30'}`}></div>}
+                  {num < 4 && <div className={`w-12 h-1 transition-all duration-300 ${step > num ? 'bg-white' : 'bg-white/30'}`}></div>}
                 </div>
               ))}
             </div>
             
             {/* Step Labels */}
-            <div className="text-xs space-y-1">
-              <p className={step === 1 ? 'font-bold' : 'opacity-60'}>Step 1: Email Verification</p>
-              <p className={step === 2 ? 'font-bold' : 'opacity-60'}>Step 2: Verify Code</p>
-              <p className={step === 3 ? 'font-bold' : 'opacity-60'}>Step 3: Personal Info</p>
-              <p className={step === 4 ? 'font-bold' : 'opacity-60'}>Step 4: Farm Details</p>
+            <div className="text-sm space-y-2 text-white/90">
+              <p className={step === 1 ? 'font-bold text-white' : ''}>• Email Verification</p>
+              <p className={step === 2 ? 'font-bold text-white' : ''}>• Verify Code</p>
+              <p className={step === 3 ? 'font-bold text-white' : ''}>• Personal Info</p>
+              <p className={step === 4 ? 'font-bold text-white' : ''}>• Farm Details</p>
             </div>
           </div>
         </div>
 
         {/* Right Side - Forms */}
-        <div className="md:w-1/2 p-12 flex flex-col justify-center">
-          <div className="max-w-md mx-auto w-full">
-            <h2 className="text-3xl font-bold text-gray-800 mb-2">Create Account</h2>
-            <p className="text-gray-600 mb-8">
+        <div className="md:w-1/2 p-6 ">
+          <div className="max-w-md mx-auto bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl p-8 md:p-10 border border-white/30 ">
+            <h2 className="text-3xl font-bold text-gray-800 mb-2">
+              {step <= 2 ? 'Welcome back, Farmer' : 'Join Our Community'}
+            </h2>
+            <p className="text-gray-600 mb-6">
               {step === 1 && 'Enter your email to get started'}
-              {step === 2 && 'Enter the 6-digit code sent to your email'}
+              {step === 2 && 'Enter the verification code'}
               {step === 3 && 'Enter your personal information'}
               {step === 4 && 'Tell us about your farm'}
             </p>
 
             {errors.submit && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600">
                 {errors.submit}
               </div>
             )}
 
             {/* Step 1: Email */}
             {step === 1 && (
-              <div className="space-y-6">
+              <div className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email Address
+                    Email
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Mail className="h-5 w-5 text-gray-400" />
-                    </div>
                     <input
                       type="email"
                       name="email"
                       value={formData.email}
                       onChange={handleChange}
-                      className={`block w-full pl-10 pr-3 py-3 border ${
-                        errors.email ? 'border-red-500' : 'border-gray-300'
-                      } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                      className={`block w-full px-4 py-3 bg-white/60 backdrop-blur-sm border ${
+                        errors.email ? 'border-red-500' : 'border-white/40'
+                      } rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent placeholder-gray-500`}
                       placeholder="your@email.com"
                       disabled={loading}
                     />
@@ -340,7 +354,7 @@ const Register = () => {
                   type="button"
                   onClick={handleSendCode}
                   disabled={loading}
-                  className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-600 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-3.5 rounded-xl font-semibold hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {loading ? (
                     <>
@@ -348,10 +362,7 @@ const Register = () => {
                       Sending...
                     </>
                   ) : (
-                    <>
-                      Send Verification Code
-                      <ArrowRight className="w-5 h-5" />
-                    </>
+                    'Send Verification Code'
                   )}
                 </button>
               </div>
@@ -359,7 +370,7 @@ const Register = () => {
 
             {/* Step 2: Verify Code */}
             {step === 2 && (
-              <div className="space-y-6">
+              <div className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Verification Code
@@ -370,9 +381,9 @@ const Register = () => {
                     value={formData.verificationCode}
                     onChange={handleChange}
                     maxLength="6"
-                    className={`block w-full px-3 py-3 border ${
-                      errors.verificationCode ? 'border-red-500' : 'border-gray-300'
-                    } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center text-2xl tracking-widest font-bold`}
+                    className={`block w-full px-3 py-3 bg-white/60 backdrop-blur-sm border ${
+                      errors.verificationCode ? 'border-red-500' : 'border-white/40'
+                    } rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent text-center text-2xl tracking-widest font-bold`}
                     placeholder="000000"
                     disabled={loading}
                   />
@@ -383,7 +394,7 @@ const Register = () => {
                       Code sent to: <strong>{formData.email}</strong>
                     </p>
                     {timerSeconds > 0 && (
-                      <p className="text-sm text-blue-600 mt-2">
+                      <p className="text-sm text-green-600 mt-2">
                         Expires in: <strong>{formatTime(timerSeconds)}</strong>
                       </p>
                     )}
@@ -391,7 +402,7 @@ const Register = () => {
                       type="button"
                       onClick={handleSendCode}
                       disabled={timerSeconds > 540 || loading}
-                      className="text-sm text-blue-600 hover:text-blue-700 font-medium mt-2 disabled:opacity-50"
+                      className="text-sm text-green-600 hover:text-green-700 font-medium mt-2 disabled:opacity-50"
                     >
                       Resend Code
                     </button>
@@ -402,7 +413,7 @@ const Register = () => {
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="w-1/3 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300"
+                    className="w-1/3 bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-300 transition-all"
                   >
                     Back
                   </button>
@@ -410,7 +421,7 @@ const Register = () => {
                     type="button"
                     onClick={handleVerifyCode}
                     disabled={loading}
-                    className="w-2/3 bg-gradient-to-r from-blue-500 to-purple-500 text-white py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-600 transition-all duration-200 shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-2/3 bg-gradient-to-r from-green-600 to-green-700 text-white py-3 rounded-xl font-semibold hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-lg disabled:opacity-50"
                   >
                     {loading ? 'Verifying...' : 'Verify Code'}
                   </button>
@@ -421,96 +432,88 @@ const Register = () => {
             {/* Step 3: Personal Info */}
             {step === 3 && (
               <form className="space-y-5">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <User className="h-5 w-5 text-gray-400" />
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Left Column */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                     <input
                       type="text"
                       name="fullName"
                       value={formData.fullName}
                       onChange={handleChange}
-                      className={`block w-full pl-10 pr-3 py-2.5 border ${errors.fullName ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                      className={`block w-full px-4 py-3 bg-white/60 backdrop-blur-sm border ${errors.fullName ? 'border-red-500' : 'border-white/40'} rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                       placeholder="John Doe"
                     />
+                    {errors.fullName && <p className="mt-1 text-sm text-red-600">{errors.fullName}</p>}
                   </div>
-                  {errors.fullName && <p className="mt-1 text-sm text-red-600">{errors.fullName}</p>}
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Phone className="h-5 w-5 text-gray-400" />
-                    </div>
+                  {/* Right Column */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
                     <input
                       type="tel"
                       name="phone"
                       value={formData.phone}
                       onChange={handleChange}
-                      className={`block w-full pl-10 pr-3 py-2.5 border ${errors.phone ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                      placeholder="+1 (555) 123-4567"
+                      className={`block w-full px-4 py-3 bg-white/60 backdrop-blur-sm border ${errors.phone ? 'border-red-500' : 'border-white/40'} rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent`}
+                      placeholder="+94 123-4567"
                     />
+                    {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone}</p>}
                   </div>
-                  {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone}</p>}
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-gray-400" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Left Column */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        className={`block w-full px-4 pr-10 py-3 bg-white/60 backdrop-blur-sm border ${errors.password ? 'border-red-500' : 'border-white/40'} rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent`}
+                        placeholder="Min. 8 characters"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
+                      </button>
                     </div>
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      name="password"
-                      value={formData.password}
-                      onChange={handleChange}
-                      className={`block w-full pl-10 pr-10 py-2.5 border ${errors.password ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                      placeholder="Min. 8 characters"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                    >
-                      {showPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
-                    </button>
+                    {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
                   </div>
-                  {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-gray-400" />
+                  {/* Right Column */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleChange}
+                        className={`block w-full px-4 pr-10 py-3 bg-white/60 backdrop-blur-sm border ${errors.confirmPassword ? 'border-red-500' : 'border-white/40'} rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent`}
+                        placeholder="Repeat password"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
+                      </button>
                     </div>
-                    <input
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      name="confirmPassword"
-                      value={formData.confirmPassword}
-                      onChange={handleChange}
-                      className={`block w-full pl-10 pr-10 py-2.5 border ${errors.confirmPassword ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                      placeholder="Repeat password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                    >
-                      {showConfirmPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
-                    </button>
+                    {errors.confirmPassword && <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}
                   </div>
-                  {errors.confirmPassword && <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}
                 </div>
 
                 <button
                   type="button"
                   onClick={handleNext}
-                  className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-600 transition-all duration-200 shadow-lg hover:shadow-xl"
+                  className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-3.5 rounded-xl font-semibold hover:from-green-700 hover:to-green-800 transition-all duration-200 shadow-lg hover:shadow-xl"
                 >
                   Next Step
                 </button>
@@ -520,70 +523,68 @@ const Register = () => {
             {/* Step 4: Farm Info */}
             {step === 4 && (
               <form onSubmit={handleSubmit} className="space-y-5">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Farm Name</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Building2 className="h-5 w-5 text-gray-400" />
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Left Column */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Farm Name</label>
                     <input
                       type="text"
                       name="farmName"
                       value={formData.farmName}
                       onChange={handleChange}
-                      className={`block w-full pl-10 pr-3 py-2.5 border ${errors.farmName ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                      className={`block w-full px-4 py-3 bg-white/60 backdrop-blur-sm border ${errors.farmName ? 'border-red-500' : 'border-white/40'} rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                       placeholder="Green Valley Farm"
                     />
+                    {errors.farmName && <p className="mt-1 text-sm text-red-600">{errors.farmName}</p>}
                   </div>
-                  {errors.farmName && <p className="mt-1 text-sm text-red-600">{errors.farmName}</p>}
+
+                  {/* Right Column */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Farm Type</label>
+                    <select
+                      name="farmType"
+                      value={formData.farmType}
+                      onChange={handleChange}
+                      className={`block w-full px-4 py-3 bg-white/60 backdrop-blur-sm border ${errors.farmType ? 'border-red-500' : 'border-white/40'} rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent`}
+                    >
+                      <option value="">Select farm type</option>
+                      {farmTypes.map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                    {errors.farmType && <p className="mt-1 text-sm text-red-600">{errors.farmType}</p>}
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Farm Type</label>
-                  <select
-                    name="farmType"
-                    value={formData.farmType}
-                    onChange={handleChange}
-                    className={`block w-full px-3 py-2.5 border ${errors.farmType ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                  >
-                    <option value="">Select farm type</option>
-                    {farmTypes.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                  {errors.farmType && <p className="mt-1 text-sm text-red-600">{errors.farmType}</p>}
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Left Column */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Farm Size (acres)</label>
+                    <input
+                      type="number"
+                      name="farmSize"
+                      value={formData.farmSize}
+                      onChange={handleChange}
+                      className={`block w-full px-4 py-3 bg-white/60 backdrop-blur-sm border ${errors.farmSize ? 'border-red-500' : 'border-white/40'} rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent`}
+                      placeholder="100"
+                      min="0"
+                    />
+                    {errors.farmSize && <p className="mt-1 text-sm text-red-600">{errors.farmSize}</p>}
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Farm Size (acres)</label>
-                  <input
-                    type="number"
-                    name="farmSize"
-                    value={formData.farmSize}
-                    onChange={handleChange}
-                    className={`block w-full px-3 py-2.5 border ${errors.farmSize ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                    placeholder="100"
-                    min="0"
-                  />
-                  {errors.farmSize && <p className="mt-1 text-sm text-red-600">{errors.farmSize}</p>}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <MapPin className="h-5 w-5 text-gray-400" />
-                    </div>
+                  {/* Right Column */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
                     <input
                       type="text"
                       name="location"
                       value={formData.location}
                       onChange={handleChange}
-                      className={`block w-full pl-10 pr-3 py-2.5 border ${errors.location ? 'border-red-500' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                      className={`block w-full px-4 py-3 bg-white/60 backdrop-blur-sm border ${errors.location ? 'border-red-500' : 'border-white/40'} rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent`}
                       placeholder="City, State, Country"
                     />
+                    {errors.location && <p className="mt-1 text-sm text-red-600">{errors.location}</p>}
                   </div>
-                  {errors.location && <p className="mt-1 text-sm text-red-600">{errors.location}</p>}
                 </div>
 
                 <div>
@@ -606,14 +607,14 @@ const Register = () => {
                   <button
                     type="button"
                     onClick={handleBack}
-                    className="w-1/3 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-all duration-200"
+                    className="w-1/3 bg-gray-200 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-300 transition-all duration-200"
                   >
                     Back
                   </button>
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-2/3 bg-gradient-to-r from-blue-500 to-purple-500 text-white py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-600 transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl disabled:opacity-50"
+                    className="w-2/3 bg-gradient-to-r from-amber-600 to-amber-700 text-white py-3 rounded-xl font-semibold hover:from-amber-700 hover:to-amber-800 transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl disabled:opacity-50"
                   >
                     {loading ? (
                       <>
@@ -621,10 +622,7 @@ const Register = () => {
                         Creating...
                       </>
                     ) : (
-                      <>
-                        <UserPlus className="h-5 w-5" />
-                        Create Account
-                      </>
+                      'Sign Up'
                     )}
                   </button>
                 </div>
@@ -634,7 +632,7 @@ const Register = () => {
             {/* Login Link */}
             <p className="text-center text-sm text-gray-600 mt-6">
               Already have an account?{' '}
-              <Link to="/login" className="text-blue-600 hover:text-blue-700 font-semibold">
+              <Link to="/login" className="text-green-600 hover:text-green-700 font-semibold">
                 Login here
               </Link>
             </p>
