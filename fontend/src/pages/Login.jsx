@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
 const Login = () => {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -43,13 +44,62 @@ const Login = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (validateForm()) {
-      console.log('Login attempt:', formData);
-      // TODO: Add API call here
-      toast.success('Login functionality will be connected to backend API');
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password
+        }),
+      });
+
+      const data = await response.json();
+
+      console.log('Login response:', data); // Debug log
+
+      if (response.ok) {
+        // Store tokens and user data
+        localStorage.setItem('accessToken', data.data.accessToken);
+        localStorage.setItem('refreshToken', data.data.refreshToken);
+        localStorage.setItem('user', JSON.stringify(data.data.user));
+
+        console.log('User role:', data.data.user.role); // Debug log
+
+        toast.success('Login successful!');
+
+        // Redirect based on user role
+        setTimeout(() => {
+          const role = data.data.user.role;
+          console.log('Navigating based on role:', role); // Debug log
+          
+          if (role === 'farm_owner') {
+            navigate('/dashboard');
+          } else if (role === 'farm_manager') {
+            navigate('/manager/dashboard');
+          } else if (role === 'accountant') {
+            navigate('/accountant/dashboard');
+          } else if (role === 'field_worker') {
+            navigate('/worker/dashboard');
+          } else {
+            navigate('/dashboard');
+          }
+        }, 1000);
+      } else {
+        toast.error(data.message || 'Login failed');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      toast.error('An error occurred. Please try again.');
     }
   };
 
@@ -105,7 +155,7 @@ const Login = () => {
 
         {/* Right Side - Login Form */}
         <div className="md:w-1/2 p-6">
-          <div className="max-w-md mx-auto bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl p-8 md:p-10 border border-white/30">
+          <div className="max-w-md mx-auto bg-white/50 backdrop-blur-xl rounded-3xl shadow-2xl p-8 md:p-10 border border-white/30">
             <h2 className="text-3xl font-bold text-gray-800 mb-2">Welcome back, Farmer</h2>
             <p className="text-gray-600 mb-6">Enter your credentials to access your account</p>
 
@@ -195,6 +245,16 @@ const Login = () => {
                   Register here
                 </Link>
               </p>
+
+              {/* Admin Login Link */}
+              <div className="mt-4 pt-4 border-t border-gray-300">
+                <p className="text-center text-sm text-gray-600">
+                  System Administrator?{' '}
+                  <Link to="/admin/login" className="text-blue-600 hover:text-blue-700 font-semibold">
+                    Admin Login
+                  </Link>
+                </p>
+              </div>
             </form>
           </div>
         </div>

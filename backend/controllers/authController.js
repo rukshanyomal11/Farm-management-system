@@ -20,7 +20,10 @@ const register = async (req, res) => {
   try {
     await connection.beginTransaction();
     
-    const { fullName, email, phone, password, farmName, farmType, farmSize, location } = req.body;
+    const { fullName, email, phone, password, farmName, farmType, farmSize, location, role } = req.body;
+    
+    // Use provided role or default to 'farm_owner'
+    const userRole = role || 'farm_owner';
     
     // Check if email was verified with code
     const [verifiedCodes] = await connection.query(
@@ -68,8 +71,8 @@ const register = async (req, res) => {
     const userId = require('crypto').randomUUID();
     await connection.query(
       `INSERT INTO users (id, email, password_hash, full_name, phone_number, role, email_verified, is_active)
-       VALUES (?, ?, ?, ?, ?, 'farm_owner', TRUE, TRUE)`,
-      [userId, email, passwordHash, fullName, phone]
+       VALUES (?, ?, ?, ?, ?, ?, TRUE, TRUE)`,
+      [userId, email, passwordHash, fullName, phone, userRole]
     );
     
     // Create farm

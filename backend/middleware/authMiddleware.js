@@ -93,4 +93,15 @@ const checkRole = (...roles) => {
   };
 };
 
-module.exports = { verifyToken, checkRole };
+// Alias for authenticateToken (for admin routes)
+const authenticateToken = verifyToken;
+
+// Alias for requireRole (for admin routes)
+const requireRole = checkRole;
+
+module.exports = { 
+  verifyToken, 
+  checkRole, 
+  authenticateToken, 
+  requireRole 
+};

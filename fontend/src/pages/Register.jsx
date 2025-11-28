@@ -12,6 +12,7 @@ const Register = () => {
     phone: '',
     password: '',
     confirmPassword: '',
+    role: 'farm_owner', // Default role
     farmName: '',
     farmType: '',
     farmSize: '',
@@ -222,6 +223,7 @@ const Register = () => {
           email: formData.email,
           phone: formData.phone,
           password: formData.password,
+          role: formData.role,
           farmName: formData.farmName,
           farmType: formData.farmType,
           farmSize: formData.farmSize,
@@ -310,7 +312,7 @@ const Register = () => {
 
         {/* Right Side - Forms */}
         <div className="md:w-1/2 p-6 ">
-          <div className="max-w-md mx-auto bg-white/70 backdrop-blur-xl rounded-3xl shadow-2xl p-8 md:p-10 border border-white/30 ">
+          <div className="max-w-md mx-auto bg-white/50 backdrop-blur-xl rounded-3xl shadow-2xl p-8 md:p-10 border border-white/30 ">
             <h2 className="text-3xl font-bold text-gray-800 mb-2">
               {step <= 2 ? 'Welcome back, Farmer' : 'Join Our Community'}
             </h2>
@@ -508,6 +510,29 @@ const Register = () => {
                     </div>
                     {errors.confirmPassword && <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}
                   </div>
+                </div>
+
+                {/* Role Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Your Role</label>
+                  <select
+                    name="role"
+                    value={formData.role}
+                    onChange={handleChange}
+                    className={`block w-full px-4 py-3 bg-white/60 backdrop-blur-sm border ${errors.role ? 'border-red-500' : 'border-white/40'} rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent`}
+                  >
+                    <option value="farm_owner">Farm Owner</option>
+                    <option value="farm_manager">Farm Manager</option>
+                    <option value="accountant">Accountant</option>
+                    <option value="field_worker">Field Worker</option>
+                  </select>
+                  {errors.role && <p className="mt-1 text-sm text-red-600">{errors.role}</p>}
+                  <p className="mt-1 text-xs text-gray-500">
+                    {formData.role === 'farm_owner' && '✓ Full access to all features and management'}
+                    {formData.role === 'farm_manager' && '✓ Manage farm operations and staff'}
+                    {formData.role === 'accountant' && '✓ Manage finances and reports'}
+                    {formData.role === 'field_worker' && '✓ Access to assigned tasks and activities'}
+                  </p>
                 </div>
 
                 <button

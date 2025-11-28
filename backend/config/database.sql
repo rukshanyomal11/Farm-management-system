@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(100) NOT NULL,
     phone_number VARCHAR(20),
-    role ENUM('farm_owner', 'farm_manager', 'accountant', 'field_worker') DEFAULT 'farm_owner',
+    role ENUM('super_admin', 'farm_owner', 'farm_manager', 'accountant', 'field_worker') DEFAULT 'farm_owner',
     email_verified BOOLEAN DEFAULT FALSE,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
