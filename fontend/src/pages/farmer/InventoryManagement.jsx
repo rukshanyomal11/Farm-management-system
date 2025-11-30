@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Edit, Trash2, Package, AlertTriangle, TrendingUp } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { fetchWithAuth, checkTokenAndRedirect } from '../../utils/authHelpers';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const InventoryManagement = () => {
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     itemName: '',
     category: '',
@@ -24,59 +30,46 @@ const InventoryManagement = () => {
     fetchItems();
   }, []);
 
-  const fetchItems = () => {
-    // Mock data - replace with API call
-    const mockItems = [
-      {
-        id: 1,
-        itemName: 'Fertilizer - NPK 15-15-15',
-        category: 'Fertilizer',
-        quantity: '150',
-        unit: 'kg',
-        minThreshold: '50',
-        location: 'Storage Room A',
-        supplier: 'AgriSupply Co.',
-        lastRestocked: '2024-10-15',
-        notes: 'For general crops'
-      },
-      {
-        id: 2,
-        itemName: 'Seeds - Wheat',
-        category: 'Seeds',
-        quantity: '25',
-        unit: 'kg',
-        minThreshold: '20',
-        location: 'Seed Vault',
-        supplier: 'Premium Seeds Ltd.',
-        lastRestocked: '2024-11-01',
-        notes: 'Spring variety'
-      },
-      {
-        id: 3,
-        itemName: 'Pesticide - Organic Spray',
-        category: 'Pesticide',
-        quantity: '8',
-        unit: 'liters',
-        minThreshold: '10',
-        location: 'Chemical Storage',
-        supplier: 'EcoFarm Solutions',
-        lastRestocked: '2024-09-20',
-        notes: 'Low stock - reorder soon'
-      },
-      {
-        id: 4,
-        itemName: 'Animal Feed - Poultry',
-        category: 'Animal Feed',
-        quantity: '500',
-        unit: 'kg',
-        minThreshold: '100',
-        location: 'Feed Storage',
-        supplier: 'FeedMaster Inc.',
-        lastRestocked: '2024-11-10',
-        notes: 'High protein formula'
+  const fetchItems = async () => {
+    try {
+      setLoading(true);
+      if (checkTokenAndRedirect()) return;
+
+      const response = await fetchWithAuth(`${API_URL}/inventory`);
+
+      const data = await response.json();
+
+      if (response.ok && data.status === 'success') {
+        // Transform backend data to frontend format
+        const transformedItems = data.data.inventory.map(item => ({
+          id: item.id,
+          itemName: item.item_name,
+          category: item.category,
+          quantity: item.quantity?.toString() || '0',
+          unit: item.unit,
+          minThreshold: item.reorder_level?.toString() || '0',
+          location: item.location || '',
+          supplier: item.supplier_name || '',
+          lastRestocked: item.purchase_date ? item.purchase_date.split('T')[0] : '',
+          notes: item.notes || '',
+          unitPrice: item.unit_price,
+          totalValue: item.total_value
+        }));
+        setItems(transformedItems);
+      } else {
+        if (response.status === 401) {
+          toast.error('Session expired. Please login again.');
+          setTimeout(() => navigate('/login'), 2000);
+        } else {
+          toast.error(data.message || 'Failed to fetch inventory');
+        }
       }
-    ];
-    setItems(mockItems);
+    } catch (error) {
+      console.error('Fetch inventory error:', error);
+      toast.error('Failed to connect to server');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -87,24 +80,88 @@ const InventoryManagement = () => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (editingItem) {
-      setItems(items.map(item => 
-        item.id === editingItem.id ? { ...formData, id: item.id } : item
-      ));
-      toast.success('Item updated successfully!');
-    } else {
-      const newItem = {
-        ...formData,
-        id: Date.now()
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      
+      if (!token) {
+        toast.error('Please login to manage inventory');
+        return;
+      }
+
+      // Transform frontend data to backend format
+      const payload = {
+        itemName: formData.itemName.trim(),
+        category: formData.category.toLowerCase(),
+        quantity: parseFloat(formData.quantity) || 0,
+        unit: formData.unit.toLowerCase(),
+        reorderLevel: parseFloat(formData.minThreshold) || null,
+        supplierName: formData.supplier?.trim() || null,
+        location: formData.location?.trim() || null,
+        purchaseDate: formData.lastRestocked || null,
+        notes: formData.notes?.trim() || null
       };
-      setItems([...items, newItem]);
-      toast.success('Item added successfully!');
+
+      if (editingItem) {
+        // Update existing item
+        const response = await fetch(`${API_URL}/inventory/${editingItem.id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.status === 'success') {
+          toast.success('Item updated successfully!');
+          await fetchItems();
+          resetForm();
+        } else {
+          if (response.status === 401) {
+            toast.error('Session expired. Please login again.');
+            setTimeout(() => navigate('/login'), 2000);
+          } else {
+            toast.error(data.message || 'Failed to update item');
+          }
+        }
+      } else {
+        // Create new item
+        const response = await fetch(`${API_URL}/inventory`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.status === 'success') {
+          toast.success('Item added successfully!');
+          await fetchItems();
+          resetForm();
+        } else {
+          if (response.status === 401) {
+            toast.error('Session expired. Please login again.');
+            setTimeout(() => navigate('/login'), 2000);
+          } else {
+            toast.error(data.message || 'Failed to add item');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Submit error:', error);
+      toast.error('An error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    
-    resetForm();
   };
 
   const handleEdit = (item) => {
@@ -113,10 +170,46 @@ const InventoryManagement = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (id) => {
-    if (confirm('Are you sure you want to delete this item?')) {
-      setItems(items.filter(item => item.id !== id));
-      toast.success('Item deleted successfully!');
+  const handleDelete = async (id) => {
+    if (!confirm('Are you sure you want to delete this item?')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      
+      if (!token) {
+        toast.error('Please login to manage inventory');
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/inventory/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.status === 'success') {
+        toast.success('Item deleted successfully!');
+        await fetchItems();
+      } else {
+        if (response.status === 401) {
+          toast.error('Session expired. Please login again.');
+          setTimeout(() => navigate('/login'), 2000);
+        } else {
+          toast.error(data.message || 'Failed to delete item');
+        }
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error('An error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -356,13 +449,14 @@ const InventoryManagement = () => {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     >
                       <option value="">Select Category</option>
-                      <option value="Fertilizer">Fertilizer</option>
-                      <option value="Seeds">Seeds</option>
-                      <option value="Pesticide">Pesticide</option>
-                      <option value="Animal Feed">Animal Feed</option>
-                      <option value="Equipment">Equipment</option>
-                      <option value="Tools">Tools</option>
-                      <option value="Other">Other</option>
+                      <option value="feed">Feed</option>
+                      <option value="fertilizer">Fertilizer</option>
+                      <option value="seeds">Seeds</option>
+                      <option value="medicine">Medicine</option>
+                      <option value="equipment">Equipment</option>
+                      <option value="tools">Tools</option>
+                      <option value="fuel">Fuel</option>
+                      <option value="other">Other</option>
                     </select>
                   </div>
 
@@ -403,10 +497,15 @@ const InventoryManagement = () => {
                     >
                       <option value="">Select Unit</option>
                       <option value="kg">Kilograms (kg)</option>
+                      <option value="lbs">Pounds (lbs)</option>
                       <option value="liters">Liters</option>
-                      <option value="units">Units</option>
+                      <option value="gallons">Gallons</option>
                       <option value="bags">Bags</option>
+                      <option value="pieces">Pieces</option>
                       <option value="boxes">Boxes</option>
+                      <option value="tons">Tons</option>
+                      <option value="meters">Meters</option>
+                      <option value="other">Other</option>
                     </select>
                   </div>
 
@@ -463,9 +562,10 @@ const InventoryManagement = () => {
                 <div className="flex gap-4 pt-4">
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium"
+                    disabled={loading}
+                    className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
-                    {editingItem ? 'Update Item' : 'Add Item'}
+                    {loading ? 'Processing...' : (editingItem ? 'Update Item' : 'Add Item')}
                   </button>
                   <button
                     type="button"

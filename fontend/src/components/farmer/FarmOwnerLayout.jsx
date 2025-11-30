@@ -62,15 +62,9 @@ const FarmOwnerLayout = () => {
       color: 'text-yellow-600'
     },
     { 
-      path: '/dashboard/tasks', 
-      icon: ClipboardList, 
-      label: 'Tasks',
-      color: 'text-pink-600'
-    },
-    { 
       path: '/dashboard/staff', 
       icon: Users, 
-      label: 'Staff',
+      label: 'Staff Monitoring',
       color: 'text-indigo-600'
     },
     { 

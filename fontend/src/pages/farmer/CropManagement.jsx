@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Search, Edit, Trash2, Calendar, TrendingUp, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { fetchWithAuth, checkTokenAndRedirect } from '../../utils/authHelpers';
 
 const CropManagement = () => {
   const [crops, setCrops] = useState([]);
@@ -23,47 +24,44 @@ const CropManagement = () => {
     fetchCrops();
   }, []);
 
-  const fetchCrops = () => {
-    // Mock data - replace with API call
-    const mockCrops = [
-      {
-        id: 1,
-        cropName: 'Wheat',
-        cropType: 'Grain',
-        variety: 'Spring Wheat',
-        fieldLocation: 'North Field',
-        areaSize: '50',
-        plantingDate: '2024-03-15',
-        expectedHarvestDate: '2024-07-15',
-        status: 'growing',
-        notes: 'Irrigation scheduled twice weekly'
-      },
-      {
-        id: 2,
-        cropName: 'Tomatoes',
-        cropType: 'Vegetable',
-        variety: 'Roma',
-        fieldLocation: 'Greenhouse 1',
-        areaSize: '10',
-        plantingDate: '2024-04-01',
-        expectedHarvestDate: '2024-06-15',
-        status: 'harvesting',
-        notes: 'Ready for harvest'
-      },
-      {
-        id: 3,
-        cropName: 'Corn',
-        cropType: 'Grain',
-        variety: 'Sweet Corn',
-        fieldLocation: 'East Field',
-        areaSize: '75',
-        plantingDate: '2024-04-10',
-        expectedHarvestDate: '2024-08-20',
-        status: 'planted',
-        notes: 'Recently fertilized'
+  const fetchCrops = async () => {
+    try {
+      if (checkTokenAndRedirect()) return;
+
+      const response = await fetchWithAuth('http://localhost:5000/api/crops');
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          // No farm found - this is ok, just show empty state
+          setCrops([]);
+          return;
+        }
+        throw new Error(`Failed to fetch crops: ${response.statusText}`);
       }
-    ];
-    setCrops(mockCrops);
+
+      const data = await response.json();
+      console.log('Fetched crops:', data);
+      
+      // Map backend data to frontend format
+      const mappedCrops = (data.data?.crops || []).map(crop => ({
+        id: crop.id,
+        cropName: crop.crop_name,
+        cropType: crop.crop_type || 'Other',
+        variety: crop.variety || '',
+        fieldLocation: crop.field_name || 'Not assigned',
+        areaSize: crop.area_planted || '0',
+        plantingDate: crop.planting_date,
+        expectedHarvestDate: crop.expected_harvest_date,
+        status: crop.status,
+        notes: crop.notes || ''
+      }));
+      
+      setCrops(mappedCrops);
+    } catch (error) {
+      console.error('Error fetching crops:', error);
+      toast.error('Failed to load crops');
+      setCrops([]);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -74,26 +72,68 @@ const CropManagement = () => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (editingCrop) {
-      // Update existing crop
-      setCrops(crops.map(crop => 
-        crop.id === editingCrop.id ? { ...formData, id: crop.id } : crop
-      ));
-      toast.success('Crop updated successfully!');
-    } else {
-      // Add new crop
-      const newCrop = {
-        ...formData,
-        id: Date.now()
+    try {
+      if (checkTokenAndRedirect()) return;
+
+      // Map form data to backend format
+      const backendData = {
+        cropName: formData.cropName,
+        variety: formData.variety || null,
+        areaPlanted: parseFloat(formData.areaSize) || 0,
+        plantingDate: formData.plantingDate,
+        expectedHarvestDate: formData.expectedHarvestDate,
+        status: formData.status,
+        notes: formData.notes || null,
+        fieldId: null // Optional: add field selection later
       };
-      setCrops([...crops, newCrop]);
-      toast.success('Crop added successfully!');
+
+      if (editingCrop) {
+        // Update existing crop
+        const response = await fetchWithAuth(`http://localhost:5000/api/crops/${editingCrop.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(backendData)
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to update crop');
+        }
+
+        toast.success('Crop updated successfully!');
+      } else {
+        // Add new crop
+        const response = await fetch('http://localhost:5000/api/crops', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(backendData)
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to add crop');
+        }
+
+        const result = await response.json();
+        console.log('Crop added:', result);
+        toast.success('Crop added successfully!');
+      }
+      
+      // Refresh crops list
+      await fetchCrops();
+      resetForm();
+    } catch (error) {
+      console.error('Error saving crop:', error);
+      toast.error(error.message || 'Failed to save crop');
     }
-    
-    resetForm();
   };
 
   const handleEdit = (crop) => {
@@ -102,10 +142,28 @@ const CropManagement = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (id) => {
-    if (confirm('Are you sure you want to delete this crop?')) {
-      setCrops(crops.filter(crop => crop.id !== id));
+  const handleDelete = async (id) => {
+    if (!confirm('Are you sure you want to delete this crop?')) {
+      return;
+    }
+
+    try {
+      if (checkTokenAndRedirect()) return;
+
+      const response = await fetchWithAuth(`http://localhost:5000/api/crops/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to delete crop');
+      }
+
       toast.success('Crop deleted successfully!');
+      await fetchCrops(); // Refresh the list
+    } catch (error) {
+      console.error('Error deleting crop:', error);
+      toast.error(error.message || 'Failed to delete crop');
     }
   };
 

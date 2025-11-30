@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Users, Search, Filter, Eye, Lock, Unlock, Trash2, RefreshCw } from 'lucide-react';
+import { fetchWithAuth, checkTokenAndRedirect } from '../../utils/authHelpers';
 
 const UserManagement = () => {
   const navigate = useNavigate();
@@ -20,30 +21,46 @@ const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem('adminAccessToken');
-      if (!token) {
-        navigate('/admin/login');
-        return;
-      }
+      if (checkTokenAndRedirect()) return;
+      
+      const adminUser = JSON.parse(localStorage.getItem('adminUser') || '{}');
+      
+      console.log('Admin User:', adminUser);
+      console.log('Admin Role:', adminUser.role);
 
       const queryParams = new URLSearchParams();
       if (searchTerm) queryParams.append('search', searchTerm);
       if (roleFilter !== 'all') queryParams.append('role', roleFilter);
       if (statusFilter !== 'all') queryParams.append('status', statusFilter);
 
-      const response = await fetch(`http://localhost:5000/api/admin/users?${queryParams}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const url = `http://localhost:5000/api/admin/users?${queryParams}`;
+      console.log('Fetching from:', url);
+
+      const response = await fetchWithAuth(url);
+
+      console.log('Response status:', response.status);
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Users data:', data);
         setUsers(data.data.users);
         setStatistics(data.data.statistics);
-      } else if (response.status === 401) {
-        toast.error('Session expired');
-        navigate('/admin/login');
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error response:', errorData);
+        
+        if (response.status === 401) {
+          toast.error('Session expired. Please login again.');
+          localStorage.removeItem('adminAccessToken');
+          localStorage.removeItem('adminRefreshToken');
+          localStorage.removeItem('adminUser');
+          navigate('/admin/login');
+        } else if (response.status === 403) {
+          toast.error(errorData.message || 'Access denied. Admin privileges required.');
+          console.error('403 Error - User role:', adminUser.role);
+        } else {
+          toast.error(errorData.message || 'Failed to fetch users');
+        }
       }
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -130,7 +147,8 @@ const UserManagement = () => {
       farm_owner: 'bg-green-100 text-green-800',
       farm_manager: 'bg-blue-100 text-blue-800',
       accountant: 'bg-yellow-100 text-yellow-800',
-      field_worker: 'bg-gray-100 text-gray-800'
+      field_worker: 'bg-gray-100 text-gray-800',
+      viewer: 'bg-cyan-100 text-cyan-800'
     };
     return colors[role] || 'bg-gray-100 text-gray-800';
   };
@@ -206,6 +224,7 @@ const UserManagement = () => {
               <option value="farm_manager">Farm Manager</option>
               <option value="accountant">Accountant</option>
               <option value="field_worker">Field Worker</option>
+              <option value="viewer">Viewer/Consultant</option>
             </select>
           </div>
 

@@ -661,6 +661,20 @@ const Register = () => {
                 Login here
               </Link>
             </p>
+
+            {/* Other Registration Links */}
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <p className="text-sm text-gray-600 text-center mb-2">Register as a different role:</p>
+              <div className="flex flex-wrap justify-center gap-3">
+                <Link to="/admin/register" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+                  Admin
+                </Link>
+                <span className="text-gray-300">|</span>
+                <Link to="/viewer/register" className="text-sm text-cyan-600 hover:text-cyan-700 font-medium">
+                  Viewer/Consultant
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </div>

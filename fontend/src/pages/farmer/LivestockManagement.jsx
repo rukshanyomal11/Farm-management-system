@@ -1,12 +1,18 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Edit, Trash2, Heart, Activity, Calendar, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { fetchWithAuth, checkTokenAndRedirect } from '../../utils/authHelpers';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const LivestockManagement = () => {
+  const navigate = useNavigate();
   const [animals, setAnimals] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingAnimal, setEditingAnimal] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     animalType: '',
     breed: '',
@@ -23,47 +29,53 @@ const LivestockManagement = () => {
     fetchAnimals();
   }, []);
 
-  const fetchAnimals = () => {
-    // Mock data - replace with API call
-    const mockAnimals = [
-      {
-        id: 1,
-        animalType: 'Cattle',
-        breed: 'Holstein',
-        tagNumber: 'C-001',
-        dateOfBirth: '2022-05-15',
-        gender: 'Female',
-        weight: '450',
-        healthStatus: 'healthy',
-        lastCheckup: '2024-11-01',
-        notes: 'High milk producer'
-      },
-      {
-        id: 2,
-        animalType: 'Chicken',
-        breed: 'Rhode Island Red',
-        tagNumber: 'CH-015',
-        dateOfBirth: '2024-03-10',
-        gender: 'Female',
-        weight: '2.5',
-        healthStatus: 'healthy',
-        lastCheckup: '2024-10-20',
-        notes: 'Good egg layer'
-      },
-      {
-        id: 3,
-        animalType: 'Goat',
-        breed: 'Boer',
-        tagNumber: 'G-008',
-        dateOfBirth: '2023-08-22',
-        gender: 'Male',
-        weight: '65',
-        healthStatus: 'under_observation',
-        lastCheckup: '2024-11-15',
-        notes: 'Minor infection, on medication'
+  const fetchAnimals = async () => {
+    try {
+      setLoading(true);
+      if (checkTokenAndRedirect()) return;
+
+      console.log('Fetching livestock...');
+
+      const response = await fetchWithAuth(`${API_URL}/livestock`);
+
+      console.log('Response status:', response.status);
+      const data = await response.json();
+      console.log('Response data:', data);
+
+      if (response.ok && data.status === 'success') {
+        // Transform backend data to frontend format
+        const transformedAnimals = data.data.livestock.map(animal => ({
+          id: animal.id,
+          animalType: animal.type, // Keep lowercase for form
+          breed: animal.breed || '',
+          tagNumber: animal.tag_number,
+          dateOfBirth: animal.birth_date ? animal.birth_date.split('T')[0] : '',
+          gender: animal.gender, // Keep lowercase for form
+          weight: animal.weight?.toString() || '',
+          healthStatus: animal.status,
+          lastCheckup: animal.updated_at?.split('T')[0] || '',
+          notes: animal.notes || ''
+        }));
+        console.log('Transformed animals:', transformedAnimals);
+        setAnimals(transformedAnimals);
+      } else {
+        console.error('Failed to fetch livestock:', data);
+        if (response.status === 404) {
+          // No farm found - show helpful message
+          toast.error(data.message || 'No farm found. Please contact support.');
+        } else if (response.status === 401) {
+          toast.error('Session expired. Please login again.');
+          setTimeout(() => navigate('/login'), 2000);
+        } else {
+          toast.error(data.message || 'Failed to fetch livestock');
+        }
       }
-    ];
-    setAnimals(mockAnimals);
+    } catch (error) {
+      console.error('Fetch livestock error:', error);
+      toast.error('Failed to connect to server. Please check if the backend is running.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -74,36 +86,160 @@ const LivestockManagement = () => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (editingAnimal) {
-      setAnimals(animals.map(animal => 
-        animal.id === editingAnimal.id ? { ...formData, id: animal.id } : animal
-      ));
-      toast.success('Animal updated successfully!');
-    } else {
-      const newAnimal = {
-        ...formData,
-        id: Date.now()
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      
+      if (!token) {
+        toast.error('Please login to manage livestock');
+        return;
+      }
+
+      // Validate required fields
+      if (!formData.tagNumber || !formData.animalType || !formData.gender || !formData.dateOfBirth) {
+        toast.error('Please fill in all required fields');
+        setLoading(false);
+        return;
+      }
+
+      // Transform frontend data to backend format
+      const payload = {
+        tagNumber: formData.tagNumber.trim(),
+        name: formData.tagNumber.trim(), // Using tag number as name if no name field
+        type: formData.animalType.toLowerCase(),
+        breed: formData.breed?.trim() || null,
+        gender: formData.gender.toLowerCase(),
+        birthDate: formData.dateOfBirth,
+        weight: formData.weight ? parseFloat(formData.weight) : null,
+        status: formData.healthStatus || 'healthy',
+        notes: formData.notes?.trim() || null
       };
-      setAnimals([...animals, newAnimal]);
-      toast.success('Animal added successfully!');
+
+      console.log('Submitting payload:', payload);
+
+      if (editingAnimal) {
+        // Update existing animal
+        const response = await fetch(`${API_URL}/livestock/${editingAnimal.id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+        console.log('Update response:', data);
+
+        if (response.ok && data.status === 'success') {
+          toast.success('Animal updated successfully!');
+          await fetchAnimals();
+          resetForm();
+        } else {
+          console.error('Failed to update animal:', data);
+          if (response.status === 401) {
+            toast.error('Session expired. Please login again.');
+            setTimeout(() => navigate('/login'), 2000);
+          } else if (data.field === 'tagNumber') {
+            toast.error('Tag number already exists. Please use a different tag number.');
+          } else {
+            toast.error(data.message || 'Failed to update animal');
+          }
+        }
+      } else {
+        // Create new animal
+        const response = await fetch(`${API_URL}/livestock`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+        console.log('Create response:', data);
+
+        if (response.ok && data.status === 'success') {
+          toast.success('Animal added successfully!');
+          await fetchAnimals();
+          resetForm();
+        } else {
+          console.error('Failed to add animal:', data);
+          if (response.status === 401) {
+            toast.error('Session expired. Please login again.');
+            setTimeout(() => navigate('/login'), 2000);
+          } else if (data.field === 'tagNumber') {
+            toast.error('Tag number already exists. Please use a different tag number.');
+          } else {
+            toast.error(data.message || 'Failed to add animal');
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error('Submit error:', error);
+      toast.error('An error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    
-    resetForm();
   };
 
   const handleEdit = (animal) => {
     setEditingAnimal(animal);
-    setFormData(animal);
+    // Map the animal data to form data structure
+    setFormData({
+      animalType: animal.animalType,
+      breed: animal.breed || '',
+      tagNumber: animal.tagNumber,
+      dateOfBirth: animal.dateOfBirth || '',
+      gender: animal.gender,
+      weight: animal.weight || '',
+      healthStatus: animal.healthStatus,
+      lastCheckup: animal.lastCheckup || '',
+      notes: animal.notes || ''
+    });
     setShowModal(true);
   };
 
-  const handleDelete = (id) => {
-    if (confirm('Are you sure you want to delete this animal record?')) {
-      setAnimals(animals.filter(animal => animal.id !== id));
-      toast.success('Animal deleted successfully!');
+  const handleDelete = async (id) => {
+    if (!confirm('Are you sure you want to delete this animal record?')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      
+      if (!token) {
+        toast.error('Please login to manage livestock');
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/livestock/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.status === 'success') {
+        toast.success('Animal deleted successfully!');
+        await fetchAnimals();
+      } else {
+        toast.error(data.message || 'Failed to delete animal');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error('An error occurred. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -204,12 +340,17 @@ const LivestockManagement = () => {
       </div>
 
       {/* Animals Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredAnimals.map((animal) => (
+      {loading && animals.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-lg shadow">
+          <p className="text-gray-500">Loading animals...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredAnimals.map((animal) => (
           <div key={animal.id} className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow">
             <div className="h-32 bg-gradient-to-r from-orange-400 to-orange-600 flex items-center justify-center">
               <div className="text-white text-center">
-                <h3 className="text-2xl font-bold">{animal.animalType}</h3>
+                <h3 className="text-2xl font-bold capitalize">{animal.animalType}</h3>
                 <p className="text-orange-100">{animal.breed}</p>
               </div>
             </div>
@@ -226,7 +367,7 @@ const LivestockManagement = () => {
               <div className="space-y-2 mb-4">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-600">⚥ Gender:</span>
-                  <span className="font-medium">{animal.gender}</span>
+                  <span className="font-medium capitalize">{animal.gender}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-gray-600">⚖ Weight:</span>
@@ -269,8 +410,9 @@ const LivestockManagement = () => {
           </div>
         ))}
       </div>
+      )}
 
-      {filteredAnimals.length === 0 && (
+      {!loading && filteredAnimals.length === 0 && (
         <div className="text-center py-12 bg-white rounded-lg shadow">
           <p className="text-gray-500 mb-4">No animals found</p>
           <button
@@ -311,13 +453,12 @@ const LivestockManagement = () => {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     >
                       <option value="">Select Type</option>
-                      <option value="Cattle">Cattle</option>
-                      <option value="Goat">Goat</option>
-                      <option value="Sheep">Sheep</option>
-                      <option value="Chicken">Chicken</option>
-                      <option value="Pig">Pig</option>
-                      <option value="Horse">Horse</option>
-                      <option value="Other">Other</option>
+                      <option value="cattle">Cattle</option>
+                      <option value="goat">Goat</option>
+                      <option value="sheep">Sheep</option>
+                      <option value="poultry">Poultry</option>
+                      <option value="pig">Pig</option>
+                      <option value="other">Other</option>
                     </select>
                   </div>
 
@@ -368,8 +509,8 @@ const LivestockManagement = () => {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                     >
                       <option value="">Select Gender</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
                     </select>
                   </div>
 
@@ -430,14 +571,16 @@ const LivestockManagement = () => {
                 <div className="flex gap-4 pt-4">
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium"
+                    disabled={loading}
+                    className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
-                    {editingAnimal ? 'Update Animal' : 'Add Animal'}
+                    {loading ? 'Processing...' : (editingAnimal ? 'Update Animal' : 'Add Animal')}
                   </button>
                   <button
                     type="button"
                     onClick={resetForm}
-                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                    disabled={loading}
+                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors font-medium disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>

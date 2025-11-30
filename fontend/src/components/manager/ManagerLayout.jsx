@@ -13,7 +13,9 @@ import {
   LogOut,
   Menu,
   X,
-  Bell
+  Bell,
+  ClipboardCheck,
+  FileCheck
 } from 'lucide-react';
 
 const ManagerLayout = () => {
@@ -44,6 +46,24 @@ const ManagerLayout = () => {
       color: 'text-indigo-600'
     },
     { 
+      path: '/manager/tasks', 
+      icon: ClipboardList, 
+      label: 'Task Management',
+      color: 'text-pink-600'
+    },
+    { 
+      path: '/manager/submissions', 
+      icon: FileCheck, 
+      label: 'Task Submissions',
+      color: 'text-amber-600'
+    },
+    { 
+      path: '/manager/attendance', 
+      icon: ClipboardCheck, 
+      label: 'Attendance',
+      color: 'text-teal-600'
+    },
+    { 
       path: '/manager/crops', 
       icon: Sprout, 
       label: 'Crop Operations',
@@ -60,12 +80,6 @@ const ManagerLayout = () => {
       icon: Package, 
       label: 'Inventory Updates',
       color: 'text-purple-600'
-    },
-    { 
-      path: '/manager/tasks', 
-      icon: ClipboardList, 
-      label: 'Task Management',
-      color: 'text-pink-600'
     },
     { 
       path: '/manager/reports', 

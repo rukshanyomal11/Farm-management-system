@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { fetchWithAuth, checkTokenAndRedirect } from '../utils/authHelpers';
 import { 
   Sprout, 
   Bird, 
@@ -13,9 +14,12 @@ import {
   CheckCircle
 } from 'lucide-react';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 const FarmOwnerDashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     crops: { total: 0, active: 0, harvesting: 0 },
     livestock: { total: 0, healthy: 0, needsAttention: 0 },
@@ -24,6 +28,7 @@ const FarmOwnerDashboard = () => {
   });
   const [recentActivities, setRecentActivities] = useState([]);
   const [upcomingTasks, setUpcomingTasks] = useState([]);
+  const [dashboardData, setDashboardData] = useState(null);
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user') || 'null');
@@ -39,35 +44,125 @@ const FarmOwnerDashboard = () => {
     fetchDashboardData();
   }, [navigate]);
 
-  const fetchDashboardData = () => {
-    // Mock data - will be replaced with API calls
-    setStats({
-      crops: { total: 12, active: 8, harvesting: 3 },
-      livestock: { total: 45, healthy: 42, needsAttention: 3 },
-      inventory: { items: 28, lowStock: 5 },
-      finance: { income: 45000, expenses: 28000, profit: 17000 }
-    });
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      if (checkTokenAndRedirect()) return;
 
-    setRecentActivities([
-      { id: 1, type: 'crop', message: 'Wheat harvest completed', time: '2 hours ago', icon: Sprout, color: 'text-green-600' },
-      { id: 2, type: 'livestock', message: 'Health check for cattle done', time: '5 hours ago', icon: Bird, color: 'text-orange-600' },
-      { id: 3, type: 'inventory', message: 'Fertilizer restocked', time: '1 day ago', icon: Package, color: 'text-purple-600' },
-      { id: 4, type: 'finance', message: 'Payment received: $5,000', time: '1 day ago', icon: DollarSign, color: 'text-yellow-600' }
-    ]);
+      const response = await fetchWithAuth(`${API_URL}/dashboard/farmer`);
 
-    setUpcomingTasks([
-      { id: 1, task: 'Water irrigation - North Field', due: 'Today', priority: 'high' },
-      { id: 2, task: 'Cattle vaccination schedule', due: 'Tomorrow', priority: 'medium' },
-      { id: 3, task: 'Equipment maintenance check', due: 'In 3 days', priority: 'low' }
-    ]);
+      const data = await response.json();
+
+      if (response.ok && data.status === 'success') {
+        const dashData = data.data;
+        setDashboardData(dashData);
+
+        // Set statistics
+        setStats({
+          crops: {
+            total: dashData.statistics.crops.total_crops || 0,
+            active: (dashData.statistics.crops.planted || 0) + (dashData.statistics.crops.growing || 0),
+            harvesting: dashData.statistics.crops.ready_to_harvest || 0
+          },
+          livestock: {
+            total: dashData.statistics.livestock.total_livestock || 0,
+            healthy: dashData.statistics.livestock.healthy || 0,
+            needsAttention: dashData.statistics.livestock.sick || 0
+          },
+          inventory: {
+            items: dashData.statistics.inventory.total_items || 0,
+            lowStock: dashData.statistics.inventory.low_stock_items || 0
+          },
+          finance: {
+            income: 0, // You can add this data later
+            expenses: dashData.statistics.inventory.total_value || 0,
+            profit: 0
+          }
+        });
+
+        // Set recent activities from recent data
+        const activities = [];
+        
+        // Add recent crops
+        if (dashData.recent.crops && dashData.recent.crops.length > 0) {
+          dashData.recent.crops.slice(0, 2).forEach(crop => {
+            activities.push({
+              id: `crop-${crop.crop_name}`,
+              type: 'crop',
+              message: `${crop.crop_name} ${crop.variety ? '(' + crop.variety + ')' : ''} - ${crop.status}`,
+              time: new Date(crop.planting_date).toLocaleDateString(),
+              icon: Sprout,
+              color: 'text-green-600'
+            });
+          });
+        }
+
+        // Add recent livestock
+        if (dashData.recent.livestock && dashData.recent.livestock.length > 0) {
+          dashData.recent.livestock.slice(0, 2).forEach(animal => {
+            activities.push({
+              id: `livestock-${animal.tag_number}`,
+              type: 'livestock',
+              message: `${animal.type} #${animal.tag_number} - ${animal.status}`,
+              time: animal.birth_date ? new Date(animal.birth_date).toLocaleDateString() : 'N/A',
+              icon: Bird,
+              color: 'text-orange-600'
+            });
+          });
+        }
+
+        // Add low stock alerts
+        if (dashData.recent.lowStockItems && dashData.recent.lowStockItems.length > 0) {
+          dashData.recent.lowStockItems.slice(0, 2).forEach(item => {
+            activities.push({
+              id: `inventory-${item.item_name}`,
+              type: 'inventory',
+              message: `Low stock: ${item.item_name} (${item.quantity} ${item.unit})`,
+              time: 'Alert',
+              icon: AlertTriangle,
+              color: 'text-red-600'
+            });
+          });
+        }
+
+        setRecentActivities(activities);
+
+        // Set upcoming tasks (based on low stock items)
+        const tasks = [];
+        if (dashData.recent.lowStockItems && dashData.recent.lowStockItems.length > 0) {
+          dashData.recent.lowStockItems.forEach((item, index) => {
+            tasks.push({
+              id: index + 1,
+              task: `Restock ${item.item_name} (Currently: ${item.quantity} ${item.unit})`,
+              due: 'Soon',
+              priority: item.quantity <= item.reorder_level * 0.5 ? 'high' : 'medium'
+            });
+          });
+        }
+        setUpcomingTasks(tasks);
+
+      } else {
+        if (response.status === 401) {
+          toast.error('Session expired. Please login again.');
+          navigate('/login');
+        } else {
+          toast.error(data.message || 'Failed to fetch dashboard data');
+        }
+      }
+    } catch (error) {
+      console.error('Fetch dashboard error:', error);
+      toast.error('Failed to connect to server');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (!user) {
+  if (!user || loading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">Loading dashboard...</p>
         </div>
       </div>
     );

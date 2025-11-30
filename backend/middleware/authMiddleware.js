@@ -7,7 +7,10 @@ const verifyToken = async (req, res, next) => {
     // Get token from header
     const authHeader = req.headers.authorization;
     
+    console.log('🔑 Auth Header:', authHeader ? 'Present' : 'Missing');
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('❌ No valid auth header');
       return res.status(401).json({
         status: 'error',
         message: 'No token provided'
@@ -15,9 +18,11 @@ const verifyToken = async (req, res, next) => {
     }
 
     const token = authHeader.split(' ')[1];
+    console.log('🔑 Token extracted, length:', token.length);
 
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('✅ Token verified, userId:', decoded.userId);
 
     // Check if user exists and is active
     const [users] = await promisePool.query(
@@ -26,6 +31,7 @@ const verifyToken = async (req, res, next) => {
     );
 
     if (users.length === 0) {
+      console.log('❌ User not found:', decoded.userId);
       return res.status(401).json({
         status: 'error',
         message: 'User not found'
@@ -33,8 +39,10 @@ const verifyToken = async (req, res, next) => {
     }
 
     const user = users[0];
+    console.log('✅ User found:', user.email, 'Role:', user.role);
 
     if (!user.is_active) {
+      console.log('❌ User account deactivated');
       return res.status(403).json({
         status: 'error',
         message: 'Account is deactivated'
@@ -50,6 +58,7 @@ const verifyToken = async (req, res, next) => {
 
     next();
   } catch (error) {
+    console.error('❌ Auth error:', error.message);
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({
         status: 'error',
@@ -76,19 +85,27 @@ const verifyToken = async (req, res, next) => {
 const checkRole = (...roles) => {
   return (req, res, next) => {
     if (!req.user) {
+      console.log('❌ No user in request');
       return res.status(401).json({
         status: 'error',
         message: 'Unauthorized'
       });
     }
 
-    if (!roles.includes(req.user.role)) {
+    // Flatten roles array in case it's passed as an array
+    const allowedRoles = roles.flat();
+    
+    console.log('🔐 Checking role - User role:', req.user.role, 'Allowed roles:', allowedRoles);
+
+    if (!allowedRoles.includes(req.user.role)) {
+      console.log('❌ Insufficient permissions - User:', req.user.role, 'Required:', allowedRoles);
       return res.status(403).json({
         status: 'error',
         message: 'Insufficient permissions'
       });
     }
 
+    console.log('✅ Role check passed');
     next();
   };
 };

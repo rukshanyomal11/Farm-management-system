@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Users, TrendingUp, Activity, Home, Settings } from 'lucide-react';
+import { fetchWithAuth, checkTokenAndRedirect } from '../utils/authHelpers';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -30,11 +31,9 @@ const AdminDashboard = () => {
 
   const fetchDashboardData = async (token) => {
     try {
-      const response = await fetch('http://localhost:5000/api/admin/dashboard/stats', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      if (checkTokenAndRedirect()) return;
+      
+      const response = await fetchWithAuth('http://localhost:5000/api/admin/dashboard/stats');
 
       if (response.ok) {
         const data = await response.json();

@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const dotenv = require('dotenv');
+const path = require('path');
 const { testConnection } = require('./config/database');
 
 // Load environment variables
@@ -12,6 +13,14 @@ const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const verificationRoutes = require('./routes/verificationRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const cropRoutes = require('./routes/cropRoutes');
+const livestockRoutes = require('./routes/livestockRoutes');
+const inventoryRoutes = require('./routes/inventoryRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const taskRoutes = require('./routes/taskRoutes');
+const taskSubmissionRoutes = require('./routes/taskSubmissionRoutes');
+const farmMemberRoutes = require('./routes/farmMemberRoutes');
+const attendanceRoutes = require('./routes/attendanceRoutes');
 
 // Initialize express app
 const app = express();
@@ -28,6 +37,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Request logging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
@@ -39,6 +51,14 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/crops', cropRoutes);
+app.use('/api/livestock', livestockRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/task-submissions', taskSubmissionRoutes);
+app.use('/api/farm-members', farmMemberRoutes);
+app.use('/api/attendance', attendanceRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {

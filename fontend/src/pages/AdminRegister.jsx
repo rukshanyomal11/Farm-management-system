@@ -12,39 +12,142 @@ const AdminRegister = () => {
     confirmPassword: '',
     secretKey: '' // Admin secret key for registration
   });
+  const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
     });
+    // Clear error for this field when user types
+    if (errors[name]) {
+      setErrors({
+        ...errors,
+        [name]: ''
+      });
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    console.log('🔵 Admin Registration Form Submitted');
+    console.log('Form Data:', { 
+      fullName: formData.fullName, 
+      email: formData.email, 
+      hasPassword: !!formData.password,
+      hasConfirmPassword: !!formData.confirmPassword,
+      hasSecretKey: !!formData.secretKey
+    });
+
+    // Clear previous errors
+    setErrors({});
+    const newErrors = {};
 
     // Validation
-    if (!formData.fullName || !formData.email || !formData.password || !formData.confirmPassword || !formData.secretKey) {
-      toast.error('All fields are required');
+    if (!formData.fullName || formData.fullName.trim().length === 0) {
+      newErrors.fullName = 'Full name is required';
+    } else if (formData.fullName.trim().length < 3) {
+      newErrors.fullName = 'Full name must be at least 3 characters';
+    }
+
+    if (!formData.email || formData.email.trim().length === 0) {
+      newErrors.email = 'Email is required';
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        newErrors.email = 'Please enter a valid email address';
+      }
+    }
+
+    if (!formData.password || formData.password.length === 0) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 8) {
+      newErrors.password = 'Password must be at least 8 characters';
+    } else {
+      const hasUpperCase = /[A-Z]/.test(formData.password);
+      const hasLowerCase = /[a-z]/.test(formData.password);
+      const hasNumber = /[0-9]/.test(formData.password);
+      
+      if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+        newErrors.password = 'Password must contain uppercase, lowercase, and numbers';
+      }
+    }
+
+    if (!formData.confirmPassword) {
+      newErrors.confirmPassword = 'Please confirm your password';
+    } else if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    if (!formData.secretKey || formData.secretKey.trim().length === 0) {
+      newErrors.secretKey = 'Admin secret key is required';
+    }
+
+    // If there are errors, show them and stop
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      toast.error('⚠️ Please fix the errors in the form');
+      console.log('❌ Validation failed:', newErrors);
+      return;
+    }
+
+    // Full name validation
+    if (formData.fullName.trim().length < 3) {
+      console.log('❌ Validation failed: Full name too short');
+      toast.error('⚠️ Full name must be at least 3 characters');
+      return;
+    }
+
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      console.log('❌ Validation failed: Invalid email format');
+      toast.error('⚠️ Please enter a valid email address');
+      return;
+    }
+
+    // Password validation
+    if (formData.password.length < 8) {
+      console.log('❌ Validation failed: Password too short');
+      toast.error('⚠️ Password must be at least 8 characters long');
+      return;
+    }
+
+    // Password strength check
+    const hasUpperCase = /[A-Z]/.test(formData.password);
+    const hasLowerCase = /[a-z]/.test(formData.password);
+    const hasNumber = /[0-9]/.test(formData.password);
+    
+    if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+      console.log('❌ Validation failed: Weak password');
+      toast.error('⚠️ Password must contain uppercase, lowercase, and numbers');
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      toast.error('Passwords do not match');
+      console.log('❌ Validation failed: Passwords do not match');
+      toast.error('⚠️ Passwords do not match');
       return;
     }
 
-    if (formData.password.length < 8) {
-      toast.error('Password must be at least 8 characters long');
+    // Secret key validation
+    if (formData.secretKey.trim().length === 0) {
+      console.log('❌ Validation failed: No secret key');
+      toast.error('⚠️ Admin secret key is required');
       return;
     }
 
+    console.log('✅ All validations passed. Sending request...');
     setLoading(true);
 
     try {
+      console.log('📡 Making API request to: http://localhost:5000/api/admin/register');
+      
       const response = await fetch('http://localhost:5000/api/admin/register', {
         method: 'POST',
         headers: {
@@ -58,20 +161,49 @@ const AdminRegister = () => {
         }),
       });
 
+      console.log('📥 Response status:', response.status);
+      
       const data = await response.json();
+      console.log('📥 Response data:', data);
 
       if (response.ok) {
-        toast.success('Admin account created successfully!');
+        console.log('✅ Registration successful!');
+        toast.success('✅ Admin account created successfully!', {
+          icon: '🎉',
+          duration: 3000
+        });
         setTimeout(() => {
           navigate('/admin/login');
         }, 1500);
       } else {
-        toast.error(data.message || 'Registration failed');
+        console.log('❌ Registration failed:', data.message);
+        // Handle specific error messages
+        if (response.status === 409) {
+          toast.error('❌ Email already used. This email is already registered as admin.');
+        } else if (response.status === 403) {
+          toast.error('🔒 Invalid admin secret key. Please contact system administrator.');
+        } else if (response.status === 400) {
+          // Handle validation errors
+          if (data.errors && Array.isArray(data.errors)) {
+            data.errors.forEach(error => {
+              toast.error(`⚠️ ${error.message || error}`);
+            });
+          } else {
+            toast.error(data.message || '⚠️ Invalid input. Please check your data.');
+          }
+        } else {
+          toast.error(data.message || '❌ Registration failed. Please try again.');
+        }
       }
     } catch (error) {
-      console.error('Registration error:', error);
-      toast.error('An error occurred. Please try again.');
+      console.error('❌ Registration error:', error);
+      if (error.message.includes('fetch')) {
+        toast.error('🌐 Cannot connect to server. Please check your connection.');
+      } else {
+        toast.error('❌ An error occurred. Please try again.');
+      }
     } finally {
+      console.log('🔵 Request completed, loading set to false');
       setLoading(false);
     }
   };
@@ -155,10 +287,17 @@ const AdminRegister = () => {
                     name="fullName"
                     value={formData.fullName}
                     onChange={handleChange}
-                    className="w-full pl-11 pr-4 py-3 bg-white/80 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className={`w-full pl-11 pr-4 py-3 bg-white/80 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                      errors.fullName ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     placeholder="Enter your full name"
                   />
                 </div>
+                {errors.fullName && (
+                  <p className="text-red-600 text-sm mt-1 flex items-center gap-1">
+                    <span>⚠️</span> {errors.fullName}
+                  </p>
+                )}
               </div>
 
               {/* Email */}
@@ -173,10 +312,17 @@ const AdminRegister = () => {
                     name="email"
                     value={formData.email}
                     onChange={handleChange}
-                    className="w-full pl-11 pr-4 py-3 bg-white/80 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className={`w-full pl-11 pr-4 py-3 bg-white/80 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                      errors.email ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     placeholder="admin@example.com"
                   />
                 </div>
+                {errors.email && (
+                  <p className="text-red-600 text-sm mt-1 flex items-center gap-1">
+                    <span>⚠️</span> {errors.email}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -194,7 +340,9 @@ const AdminRegister = () => {
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-full pl-11 pr-12 py-3 bg-white/80 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className={`w-full pl-11 pr-12 py-3 bg-white/80 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                      errors.password ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     placeholder="Min 8 characters"
                   />
                   <button
@@ -205,6 +353,11 @@ const AdminRegister = () => {
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
+                {errors.password && (
+                  <p className="text-red-600 text-sm mt-1 flex items-center gap-1">
+                    <span>⚠️</span> {errors.password}
+                  </p>
+                )}
               </div>
 
               {/* Confirm Password */}
@@ -219,7 +372,9 @@ const AdminRegister = () => {
                     name="confirmPassword"
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    className="w-full pl-11 pr-12 py-3 bg-white/80 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className={`w-full pl-11 pr-12 py-3 bg-white/80 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                      errors.confirmPassword ? 'border-red-500' : 'border-gray-300'
+                    }`}
                     placeholder="Re-enter password"
                   />
                   <button
@@ -230,6 +385,11 @@ const AdminRegister = () => {
                     {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
+                {errors.confirmPassword && (
+                  <p className="text-red-600 text-sm mt-1 flex items-center gap-1">
+                    <span>⚠️</span> {errors.confirmPassword}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -245,13 +405,21 @@ const AdminRegister = () => {
                   name="secretKey"
                   value={formData.secretKey}
                   onChange={handleChange}
-                  className="w-full pl-11 pr-4 py-3 bg-white/80 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className={`w-full pl-11 pr-4 py-3 bg-white/80 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                    errors.secretKey ? 'border-red-500' : 'border-gray-300'
+                  }`}
                   placeholder="Enter admin secret key"
                 />
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Contact system administrator for the secret key
-              </p>
+              {errors.secretKey ? (
+                <p className="text-red-600 text-sm mt-1 flex items-center gap-1">
+                  <span>⚠️</span> {errors.secretKey}
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-1">
+                  Contact system administrator for the secret key
+                </p>
+              )}
             </div>
 
             {/* Submit Button */}

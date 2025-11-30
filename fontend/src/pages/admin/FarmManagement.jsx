@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Home, MapPin, TrendingUp, RefreshCw } from 'lucide-react';
+import { fetchWithAuth, checkTokenAndRedirect } from '../../utils/authHelpers';
 
 const FarmManagement = () => {
-  const navigate = useNavigate();
   const [farms, setFarms] = useState([]);
-  const [typeStats, setTypeStats] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [typeStats, setTypeStats] = useState([]);
 
   useEffect(() => {
     fetchFarms();
@@ -15,25 +15,16 @@ const FarmManagement = () => {
 
   const fetchFarms = async () => {
     try {
-      const token = localStorage.getItem('adminAccessToken');
-      if (!token) {
-        navigate('/admin/login');
-        return;
-      }
+      if (checkTokenAndRedirect()) return;
 
-      const response = await fetch('http://localhost:5000/api/admin/farms', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await fetchWithAuth('http://localhost:5000/api/admin/farms');
 
       if (response.ok) {
         const data = await response.json();
-        setFarms(data.data.farms);
-        setTypeStats(data.data.typeStats);
-      } else if (response.status === 401) {
-        toast.error('Session expired');
-        navigate('/admin/login');
+        if (data.status === 'success') {
+          setFarms(data.data.farms);
+          setTypeStats(data.data.typeStats || []);
+        }
       }
     } catch (error) {
       console.error('Error fetching farms:', error);

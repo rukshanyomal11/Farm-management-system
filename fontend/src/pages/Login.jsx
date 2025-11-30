@@ -246,14 +246,18 @@ const Login = () => {
                 </Link>
               </p>
 
-              {/* Admin Login Link */}
+              {/* Other Login Links */}
               <div className="mt-4 pt-4 border-t border-gray-300">
-                <p className="text-center text-sm text-gray-600">
-                  System Administrator?{' '}
-                  <Link to="/admin/login" className="text-blue-600 hover:text-blue-700 font-semibold">
-                    Admin Login
+                <p className="text-center text-sm text-gray-600 mb-2">Login as a different role:</p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  <Link to="/admin/login" className="text-sm text-blue-600 hover:text-blue-700 font-semibold">
+                    Admin
                   </Link>
-                </p>
+                  <span className="text-gray-300">|</span>
+                  <Link to="/viewer/login" className="text-sm text-cyan-600 hover:text-cyan-700 font-semibold">
+                    Viewer/Consultant
+                  </Link>
+                </div>
               </div>
             </form>
           </div>

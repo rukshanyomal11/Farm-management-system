@@ -17,42 +17,113 @@ const registerAdmin = async (req, res) => {
     
     const { fullName, email, password, secretKey } = req.body;
     
-    // Validate input
-    if (!fullName || !email || !password || !secretKey) {
+    console.log('Admin Registration Request:', { fullName, email, hasPassword: !!password, hasSecretKey: !!secretKey });
+    
+    // Validate input - detailed checks
+    if (!fullName || fullName.trim().length === 0) {
       await connection.rollback();
       return res.status(400).json({
         status: 'error',
-        message: 'All fields are required'
+        message: 'Full name is required',
+        field: 'fullName'
+      });
+    }
+
+    if (!email || email.trim().length === 0) {
+      await connection.rollback();
+      return res.status(400).json({
+        status: 'error',
+        message: 'Email is required',
+        field: 'email'
+      });
+    }
+
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      await connection.rollback();
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid email format',
+        field: 'email'
+      });
+    }
+
+    if (!password || password.length === 0) {
+      await connection.rollback();
+      return res.status(400).json({
+        status: 'error',
+        message: 'Password is required',
+        field: 'password'
+      });
+    }
+
+    if (password.length < 8) {
+      await connection.rollback();
+      return res.status(400).json({
+        status: 'error',
+        message: 'Password must be at least 8 characters long',
+        field: 'password'
+      });
+    }
+
+    if (!secretKey || secretKey.trim().length === 0) {
+      await connection.rollback();
+      return res.status(400).json({
+        status: 'error',
+        message: 'Admin secret key is required',
+        field: 'secretKey'
       });
     }
 
     // Verify admin secret key
+    console.log('Checking secret key...');
     if (secretKey !== ADMIN_SECRET_KEY) {
       await connection.rollback();
+      console.log('Invalid secret key provided');
       return res.status(403).json({
         status: 'error',
-        message: 'Invalid admin secret key'
+        message: 'Invalid admin secret key. Please contact system administrator.'
       });
     }
 
     // Check if admin already exists
+    console.log('Checking for existing admin with email:', email);
     const [existingAdmin] = await connection.query(
-      'SELECT id FROM users WHERE email = ? AND role = ?',
+      'SELECT id, email FROM users WHERE email = ? AND role = ?',
       [email, 'super_admin']
     );
 
     if (existingAdmin.length > 0) {
       await connection.rollback();
+      console.log('Admin already exists:', existingAdmin[0].email);
       return res.status(409).json({
         status: 'error',
         message: 'Admin account with this email already exists'
       });
     }
 
+    // Check if email exists with different role
+    const [existingUser] = await connection.query(
+      'SELECT id, email, role FROM users WHERE email = ?',
+      [email]
+    );
+
+    if (existingUser.length > 0) {
+      await connection.rollback();
+      console.log('Email already used by:', existingUser[0].role);
+      return res.status(409).json({
+        status: 'error',
+        message: `Email already registered as ${existingUser[0].role.replace('_', ' ')}`
+      });
+    }
+
     // Hash password
+    console.log('Hashing password...');
     const passwordHash = await bcrypt.hash(password, 10);
 
     // Create admin user
+    console.log('Creating admin user...');
     const [result] = await connection.query(
       `INSERT INTO users 
        (email, password_hash, full_name, role, email_verified, is_active) 
@@ -61,6 +132,7 @@ const registerAdmin = async (req, res) => {
     );
 
     const adminId = result.insertId;
+    console.log('Admin created successfully with ID:', adminId);
 
     await connection.commit();
 
@@ -78,9 +150,18 @@ const registerAdmin = async (req, res) => {
   } catch (error) {
     await connection.rollback();
     console.error('Admin registration error:', error);
+    
+    // Handle specific database errors
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({
+        status: 'error',
+        message: 'Email already exists in the system'
+      });
+    }
+    
     res.status(500).json({
       status: 'error',
-      message: 'Failed to create admin account'
+      message: 'Failed to create admin account. Please try again.'
     });
   } finally {
     connection.release();
@@ -92,11 +173,37 @@ const loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log('Admin login attempt for email:', email);
+
     // Validate input
     if (!email || !password) {
       return res.status(400).json({
         status: 'error',
         message: 'Email and password are required'
+      });
+    }
+
+    // Check if email exists in users table (any role)
+    const [allUsers] = await promisePool.query(
+      'SELECT role FROM users WHERE email = ?',
+      [email]
+    );
+
+    // If email doesn't exist at all
+    if (allUsers.length === 0) {
+      console.log('❌ Email not found:', email);
+      return res.status(404).json({
+        status: 'error',
+        message: 'This email is not registered. Please register first.'
+      });
+    }
+
+    // If email exists but not as admin
+    if (allUsers[0].role !== 'super_admin') {
+      console.log('❌ Email exists but not admin. Role:', allUsers[0].role);
+      return res.status(403).json({
+        status: 'error',
+        message: `This email is registered as ${allUsers[0].role.replace('_', ' ')}, not as admin.`
       });
     }
 
@@ -106,20 +213,14 @@ const loginAdmin = async (req, res) => {
       [email, 'super_admin']
     );
 
-    if (admins.length === 0) {
-      return res.status(401).json({
-        status: 'error',
-        message: 'Invalid credentials or not an admin account'
-      });
-    }
-
     const admin = admins[0];
 
     // Check if account is active
     if (!admin.is_active) {
+      console.log('❌ Admin account disabled:', email);
       return res.status(403).json({
         status: 'error',
-        message: 'Admin account is disabled'
+        message: 'Your admin account has been disabled. Contact system administrator.'
       });
     }
 
@@ -127,9 +228,10 @@ const loginAdmin = async (req, res) => {
     const isPasswordValid = await bcrypt.compare(password, admin.password_hash);
 
     if (!isPasswordValid) {
+      console.log('❌ Invalid password for:', email);
       return res.status(401).json({
         status: 'error',
-        message: 'Invalid credentials'
+        message: 'Wrong password. Please try again.'
       });
     }
 

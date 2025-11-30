@@ -75,20 +75,66 @@ const register = async (req, res) => {
       [userId, email, passwordHash, fullName, phone, userRole]
     );
     
-    // Create farm
-    const farmId = require('crypto').randomUUID();
-    await connection.query(
-      `INSERT INTO farms (id, owner_id, farm_name, farm_type, farm_size, address)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [farmId, userId, farmName, farmType, farmSize, location]
-    );
-    
-    // Create farm member entry
-    await connection.query(
-      `INSERT INTO farm_members (id, farm_id, user_id, role)
-       VALUES (?, ?, ?, 'owner')`,
-      [require('crypto').randomUUID(), farmId, userId]
-    );
+    // If user is a worker or manager, try to find an existing farm to join
+    // Otherwise create a new farm (for farm owners)
+    if (userRole === 'field_worker' || userRole === 'farm_manager') {
+      // Find the farm with the specified farm ID (your farm)
+      // You can also use an invite code system later
+      const targetFarmId = '64535a21-8925-4924-815e-6487c5e5cd40'; // Your farm ID
+      
+      const [targetFarm] = await connection.query(
+        'SELECT id FROM farms WHERE id = ?',
+        [targetFarmId]
+      );
+      
+      if (targetFarm.length > 0) {
+        const farmId = targetFarm[0].id;
+        
+        // Add worker to your farm
+        const memberRole = userRole === 'farm_manager' ? 'manager' : 'worker';
+        await connection.query(
+          `INSERT INTO farm_members (id, farm_id, user_id, role)
+           VALUES (?, ?, ?, ?)`,
+          [require('crypto').randomUUID(), farmId, userId, memberRole]
+        );
+        
+        // Add to workers table
+        await connection.query(
+          `INSERT INTO workers (id, user_id, farm_id, worker_type, date_joined, status)
+           VALUES (?, ?, ?, ?, CURDATE(), 'active')`,
+          [require('crypto').randomUUID(), userId, farmId, userRole]
+        );
+      } else {
+        // If your farm doesn't exist (shouldn't happen), create a default one
+        const farmId = require('crypto').randomUUID();
+        await connection.query(
+          `INSERT INTO farms (id, owner_id, farm_name, farm_type, farm_size, address)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [farmId, userId, farmName || 'Default Farm', farmType || 'Mixed Farming', farmSize || 0, location || '']
+        );
+        
+        await connection.query(
+          `INSERT INTO farm_members (id, farm_id, user_id, role)
+           VALUES (?, ?, ?, ?)`,
+          [require('crypto').randomUUID(), farmId, userId, 'worker']
+        );
+      }
+    } else {
+      // Create farm for farm owners
+      const farmId = require('crypto').randomUUID();
+      await connection.query(
+        `INSERT INTO farms (id, owner_id, farm_name, farm_type, farm_size, address)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [farmId, userId, farmName, farmType, farmSize, location]
+      );
+      
+      // Create farm member entry
+      await connection.query(
+        `INSERT INTO farm_members (id, farm_id, user_id, role)
+         VALUES (?, ?, ?, 'owner')`,
+        [require('crypto').randomUUID(), farmId, userId]
+      );
+    }
     
     await connection.commit();
     

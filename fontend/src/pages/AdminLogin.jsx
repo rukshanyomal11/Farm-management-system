@@ -9,27 +9,58 @@ const AdminLogin = () => {
     email: '',
     password: ''
   });
+  const [errors, setErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
     });
+    // Clear error for this field when user types
+    if (errors[name]) {
+      setErrors({
+        ...errors,
+        [name]: ''
+      });
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.email || !formData.password) {
-      toast.error('Please fill in all fields');
+    // Clear previous errors
+    setErrors({});
+    const newErrors = {};
+
+    // Client-side validation
+    if (!formData.email || formData.email.trim().length === 0) {
+      newErrors.email = 'Email is required';
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        newErrors.email = 'Please enter a valid email address';
+      }
+    }
+
+    if (!formData.password || formData.password.length === 0) {
+      newErrors.password = 'Password is required';
+    }
+
+    // If there are errors, show them and stop
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      toast.error('⚠️ Please fill in all fields correctly');
       return;
     }
 
     setLoading(true);
 
     try {
+      console.log('🔵 Login attempt with email:', formData.email);
+      
       const response = await fetch('http://localhost:5000/api/admin/login', {
         method: 'POST',
         headers: {
@@ -38,7 +69,9 @@ const AdminLogin = () => {
         body: JSON.stringify(formData),
       });
 
+      console.log('📥 Response status:', response.status);
       const data = await response.json();
+      console.log('📥 Response data:', data);
 
       if (response.ok) {
         // Store tokens
@@ -46,17 +79,93 @@ const AdminLogin = () => {
         localStorage.setItem('adminRefreshToken', data.data.refreshToken);
         localStorage.setItem('adminUser', JSON.stringify(data.data.user));
 
-        toast.success('Welcome back, Administrator!');
+        toast.success('✅ Welcome back, Administrator!', {
+          icon: '👋',
+          duration: 2000
+        });
         
         setTimeout(() => {
           navigate('/admin/dashboard');
         }, 1000);
       } else {
-        toast.error(data.message || 'Login failed');
+        console.log('❌ Login failed:', response.status, data.message);
+        
+        // Handle specific error messages
+        if (response.status === 404) {
+          console.log('❌ Email not registered');
+          setErrors({ email: 'This email is not registered' });
+          toast.error('❌ This email is not registered. Please register first.', {
+            duration: 4000,
+            style: {
+              background: '#FEE',
+              color: '#C00',
+              fontWeight: 'bold'
+            }
+          });
+        } else if (response.status === 401) {
+          console.log('❌ Wrong password');
+          setErrors({ password: 'Wrong password' });
+          toast.error('❌ Wrong password. Please try again.', {
+            duration: 3000,
+            style: {
+              background: '#FEE',
+              color: '#C00',
+              fontWeight: 'bold'
+            }
+          });
+        } else if (response.status === 403) {
+          console.log('❌ Access denied:', data.message);
+          if (data.message && data.message.includes('disabled')) {
+            toast.error('🔒 Your admin account has been disabled. Contact system administrator.', {
+              duration: 5000,
+              style: {
+                background: '#FEE',
+                color: '#C00',
+                fontWeight: 'bold'
+              }
+            });
+          } else {
+            setErrors({ email: data.message });
+            toast.error(`❌ ${data.message}`, {
+              duration: 4000,
+              style: {
+                background: '#FEE',
+                color: '#C00',
+                fontWeight: 'bold'
+              }
+            });
+          }
+        } else if (response.status === 400) {
+          toast.error('⚠️ Please fill in all fields correctly', {
+            duration: 3000
+          });
+        } else {
+          toast.error(data.message || '❌ Login failed. Please try again.', {
+            duration: 3000,
+            style: {
+              background: '#FEE',
+              color: '#C00',
+              fontWeight: 'bold'
+            }
+          });
+        }
       }
     } catch (error) {
       console.error('Login error:', error);
-      toast.error('An error occurred. Please try again.');
+      if (error.message.includes('fetch')) {
+        toast.error('🌐 Cannot connect to server. Please check your connection.', {
+          duration: 4000,
+          style: {
+            background: '#FEE',
+            color: '#C00',
+            fontWeight: 'bold'
+          }
+        });
+      } else {
+        toast.error('❌ An error occurred. Please try again.', {
+          duration: 3000
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -140,11 +249,18 @@ const AdminLogin = () => {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full pl-11 pr-4 py-3 bg-white/80 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className={`w-full pl-11 pr-4 py-3 bg-white/80 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                    errors.email ? 'border-red-500' : 'border-gray-300'
+                  }`}
                   placeholder="admin@example.com"
                   autoComplete="email"
                 />
               </div>
+              {errors.email && (
+                <p className="text-red-600 text-sm mt-1 flex items-center gap-1">
+                  <span>⚠️</span> {errors.email}
+                </p>
+              )}
             </div>
 
             {/* Password */}
@@ -159,7 +275,9 @@ const AdminLogin = () => {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  className="w-full pl-11 pr-12 py-3 bg-white/80 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  className={`w-full pl-11 pr-12 py-3 bg-white/80 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all ${
+                    errors.password ? 'border-red-500' : 'border-gray-300'
+                  }`}
                   placeholder="Enter your password"
                   autoComplete="current-password"
                 />
@@ -171,6 +289,11 @@ const AdminLogin = () => {
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+              {errors.password && (
+                <p className="text-red-600 text-sm mt-1 flex items-center gap-1">
+                  <span>⚠️</span> {errors.password}
+                </p>
+              )}
             </div>
 
             {/* Submit Button */}
